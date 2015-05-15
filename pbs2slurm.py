@@ -10,7 +10,8 @@ The PBS script is split into
 
 pbs2slurm carries out 3 transformation steps
 - if no shebang line was present in the PBS script, a new one is added. By 
-  default this is #! /bin/bash, but this can be changed (see below)
+  default this is #! /bin/bash, but this can be changed (see below).
+  pbs2slurm will never alter an existing shebang line.
 - #PBS directives in the header are translated, where possible, to #SBATCH 
   directives.
 - common PBS environment variables in the body are translated to their SLURM 
@@ -28,15 +29,16 @@ Examples:
     pbs2slurm -s /bin/zsh pbs_script > slurm_script
 
 See also https://hpc.cit.nih.gov/docs/pbs2slurm.html.
+
+Contact staff@helix.nih.gov with questions and bug reports.
 """
-
-
 
 from __future__ import print_function
 import sys
 import re
 
 __version__ = 0
+__author__ = "Wolfgang Resch"
 
 def info(s):
     print("INFO:    {}".format(s), file=sys.stderr)
