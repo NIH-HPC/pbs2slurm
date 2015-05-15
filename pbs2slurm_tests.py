@@ -1,5 +1,4 @@
 import pbs2slurm as p2s
-import pbs2slurm as p2s
 import sys
 import atexit
 import difflib
