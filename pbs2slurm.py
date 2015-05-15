@@ -17,7 +17,7 @@ pbs2slurm carries out 3 transformation steps
 - common PBS environment variables in the body are translated to their SLURM 
   equivalents
 
-Please be sure to manually go over translated scripts to esure their 
+Please be sure to manually go over translated scripts to ensure their 
 correctness.
 
 If no input file is specified, pbs2slurm reads from stdin. The translated script 
@@ -37,7 +37,7 @@ from __future__ import print_function
 import sys
 import re
 
-__version__ = 0
+__version__ = 0.1
 __author__ = "Wolfgang Resch"
 
 def info(s):
