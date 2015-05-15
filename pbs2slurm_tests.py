@@ -265,6 +265,7 @@ set -o pipefail
 module load fastqc
 """
     check(input, expected, p2s.convert_batch_script(input), desc)
+
 ################################################################################
 # email address
 def test_valid_email_address():
@@ -278,24 +279,6 @@ module load fastqc
 """
     expected = """#! /bin/bash
 #SBATCH --mail-user="student@helix.nih.gov"
-set -e
-set -o pipefail
-
-module load fastqc
-"""
-    check(input, expected, p2s.convert_batch_script(input), desc)
-
-def test_invalid_email_address():
-    desc = "Drop #PBS -M directive with invalid email address"
-    input = """#! /bin/bash
-#PBS -M fnord
-set -e
-set -o pipefail
-
-module load fastqc
-"""
-    expected = """#! /bin/bash
-
 set -e
 set -o pipefail
 
@@ -331,6 +314,24 @@ module load fastqc
 """
     expected = """#! /bin/bash
 #SBATCH --mail-user="student@helix.nih.gov"
+set -e
+set -o pipefail
+
+module load fastqc
+"""
+    check(input, expected, p2s.convert_batch_script(input), desc)
+
+def test_multiple_email_addresses2():
+    desc = "Change #PBS -M directive to #SBATCH --mail-user [multiple emails]"
+    input = """#! /bin/bash
+#PBS -M student,teacher@helix.nih.gov
+set -e
+set -o pipefail
+
+module load fastqc
+"""
+    expected = """#! /bin/bash
+#SBATCH --mail-user="teacher@helix.nih.gov"
 set -e
 set -o pipefail
 
@@ -771,10 +772,30 @@ module load fastqc
 ################################################################################
 # job array
 
-def test_drop_job_array():
-    desc = "Drop #PBS -J" 
+def test_fix_job_array():
+    desc = "translate #PBS -J to #SBATCH --array" 
     input = """#! /bin/bash
 #PBS -J 1-20
+
+set -e
+set -o pipefail
+
+module load fastqc
+"""
+    expected = """#! /bin/bash
+#SBATCH --array=1-20
+
+set -e
+set -o pipefail
+
+module load fastqc
+"""
+    check(input, expected, p2s.convert_batch_script(input), desc)
+
+def test_drop_empty_job_array():
+    desc = "drops #PBS -J without argument" 
+    input = """#! /bin/bash
+#PBS -J  
 
 set -e
 set -o pipefail

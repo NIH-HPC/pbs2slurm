@@ -1,9 +1,36 @@
 #! /usr/local/bin/python
 # vim: set ft=python :
+"""
+Translates PBS batch script to Slurm.
+
+The PBS script is split into
+- a shebang line
+- a header containing #PBS directives, comments, and empty lines
+- the body of the script
+
+pbs2slurm carries out 3 transformation steps
+- if no shebang line was present in the PBS script, a new one is added. By 
+  default this is #! /bin/bash, but this can be changed (see below)
+- #PBS directives in the header are translated, where possible, to #SBATCH 
+  directives.
+- common PBS environment variables in the body are translated to their SLURM 
+  equivalents
+
+Please be sure to manually go over translated scripts to esure their 
+correctness.
+
+If no input file is specified, pbs2slurm reads from stdin. The translated script 
+is written to stdout.
+
+Examples:
+    pbs2slurm < pbs_script > slurm_script
+    pbs2slurm pbs_script > slurm_script
+    pbs2slurm -s /bin/zsh pbs_script > slurm_script
+
+See also https://hpc.cit.nih.gov/docs/pbs2slurm.html.
+"""
+
 # Created by: Wolfgang Resch
-
-
-
 #Notes: 
 # - PBS directives in batch script use a more relaxed
 #   grammar than command line switches. For example
@@ -12,7 +39,7 @@
 #       '#PBS-Nfoo'
 #       all work! All of these will be correctly translated.
 # - to get an idea of what is in PBS job scripts i collected
-#   40119 pbs directives from user scripts. Frequencies
+#   40119 pbs directives from existing scripts. Frequencies
 #   of the different directives:
 #       
 #   24034 #PBS -N
@@ -49,6 +76,10 @@ from __future__ import print_function
 import sys
 import re
 
+__version__ = 0
+
+def info(s):
+    print("INFO:    {}".format(s), file=sys.stderr)
 def warn(s):
     print("WARNING: {}".format(s), file=sys.stderr)
 def error(s):
@@ -97,44 +128,44 @@ def fix_env_vars(input):
 def fix_jobname(pbs_directives):
     """translates #PBS -N"""
     j_re = re.compile(r'^#PBS[ \t]*-N[ \t]*(\S*)[^\n]*', re.M)
-    j_ma = j_re.search(pbs_directives)
-    if j_ma is not None:
-        if j_ma.group(1) != "":
-            return j_re.sub(r'#SBATCH --job-name="\1"',
-                          pbs_directives)
+    def _repl(m):
+        if m.group(1) == "":
+            warn("#PBS -N without argument -> dropped")
         else:
-            # drop directives with empty jobname
-            return j_re.sub("",
-                          pbs_directives)
-    return pbs_directives
+            return '#SBATCH --job-name="{}"'.format(m.group(1))
+    return j_re.sub(_repl, pbs_directives)
+
 
 def fix_email_address(pbs_directives):
     """translates #PBS -M"""
-    pbsm_re = re.compile(r'^#PBS[ \t]*-M[ \t]*([^\s,]*)[^\n]*', re.M)
+    pbsm_re = re.compile(r'^#PBS[ \t]*-M[ \t]*\b(.*)\b[^\n]*', re.M)
     pbsm_match = pbsm_re.search(pbs_directives)
-    if pbsm_match is None:
-        return pbs_directives
-    else:
-        # check for valid email address
-        if re.match(r'[\w.%+-]+@[\w.-]+\.[A-Za-z]{2,4}', pbsm_match.group(1)) is None:
-            warn("Invalid or missing email address: '{}'; directive ignored".format(
-                pbsm_match.group(1)))
-            return pbsm_re.sub('', pbs_directives)
+    def _repl(m):
+        if m.group(1) == "":
+            warn("#PBS -M without argument -> dropped".format(pbsm_match.group()))
+            return ""
+        all_adr = [x.strip() for x in m.group(1).split(",")]
+        valid_adr = []
+        for adr in all_adr:
+            if re.match(r'[\w.%+-]+@[\w.-]+\.[A-Za-z]{2,4}', adr) is not None:
+                valid_adr.append(adr)
+        if len(valid_adr) == 0:
+            warn("email address may be invalid: '{}'".format(all_adr[0]))
+            use_adr = all_adr[0]
         else:
-            return pbsm_re.sub(r'#SBATCH --mail-user="\1"',
-                               pbs_directives)
+            use_adr = valid_adr[0]
+        return '#SBATCH --mail-user="{}"'.format(use_adr)
+    return pbsm_re.sub(_repl, pbs_directives)
 
 def fix_email_mode(pbs_directives):
     """translates #PBS -m"""
     pbsm_re = re.compile(r'^#PBS[ \t]*-m[ \t]*([aben]{0,4})[^\n]*', re.M)
-    pbsm_m = pbsm_re.search(pbs_directives)
-    if pbsm_m is None:
-        return pbs_directives
-    else:
+    def _repl(m):
         # n takes precedence if it's present
-        pbs_events = pbsm_m.group(1)
+        pbs_events = m.group(1)
         if "n" in pbs_events or pbs_events == "":
-            return pbsm_re.sub('', pbs_directives)
+            info("#PBS -m n is the default in slurm -> dropped")
+            return ""
         slurm_events = []
         if "a" in pbs_events:
             slurm_events.append("FAIL")
@@ -143,91 +174,90 @@ def fix_email_mode(pbs_directives):
         if "e" in pbs_events:
             slurm_events.append("END")
         slurm_events.sort()
-        return pbsm_re.sub("#SBATCH --mail-type={}".format(",".join(slurm_events)),
-                pbs_directives)
+        return "#SBATCH --mail-type={}".format(",".join(slurm_events))
+    return pbsm_re.sub(_repl, pbs_directives)
 
 
 def fix_stdout_stderr(pbs_directives):
     """translates #PBS -o, #PBS -e, #PBS -j, and #PBS -k"""
     out_re = re.compile(r'^#PBS[ \t]*-o[ \t]*(\S*)[^\n]*', re.M)
-    out_m  = out_re.search(pbs_directives)
     err_re = re.compile(r'^#PBS[ \t]*-e[ \t]*(\S*)[^\n]*', re.M)
-    err_m  = err_re.search(pbs_directives)
     join_re = re.compile(r'^#PBS[ \t]*-j[ \t]*(\S{0,4})[^\n]*', re.M)
-    join_m  = join_re.search(pbs_directives)
     keep_re = re.compile(r'^#PBS[ \t]*-k[ \t]*(\S{0,4})[^\n]*', re.M)
-    keep_m  = keep_re.search(pbs_directives)
     # remove the -k directive
-    if keep_m is not None:
-        warn("#PBS -k directive removed")
-        pbs_directives = keep_re.sub(r'', pbs_directives)
+    def _repl(m):
+        info("#PBS -k is not needed in slurm -> dropped")
+        return ""
+    pbs_directives = keep_re.sub(_repl, pbs_directives)
     # remove the -j directive
-    if join_m is not None:
-        warn("#PBS -j directive removed (joining is done by default in slurm)")
-        pbs_directives = join_re.sub(r'', pbs_directives)
+    def _repl(m):
+        info("#PBS -j is the default in slurm -> dropped")
+        return ""
+    pbs_directives = join_re.sub(_repl, pbs_directives)
     # change the -o directive
-    if out_m is not None:
-        if out_m.group(1) != "":
-            pbs_directives = out_re.sub(r'#SBATCH --output=\1', pbs_directives)
+    def _repl(m):
+        if m.group(1) == "":
+            warn("#PBS -o without argument -> dropped")
+            return ""
         else:
-            warn("Dropping #PBS -o without path")
-            pbs_directives = out_re.sub("", pbs_directives)
+            return "#SBATCH --output={}".format(m.group(1))
+    pbs_directives = out_re.sub(_repl, pbs_directives)
     # change the -e directive
-    if err_m is not None:
-        if err_m.group(1) != "":
-            pbs_directives = err_re.sub(r'#SBATCH --error=\1', pbs_directives)
+    def _repl(m):
+        if m.group(1) == "":
+            warn("#PBS -e without argument -> dropped")
+            return ""
         else:
-            warn("Dropping #PBS -e without path")
-            pbs_directives = err_re.sub("", pbs_directives)
+            return "#SBATCH --error={}".format(m.group(1))
+    pbs_directives = err_re.sub(_repl, pbs_directives)
     return pbs_directives
 
 def fix_restartable(pbs_directives):
     """translate #PBS -r; PBS default is 'y'"""
     r_re = re.compile(r'^#PBS[ \t]*-r[ \t]*(\S*)[^\n]*', re.M)
-    r_ma = r_re.search(pbs_directives)
-    if r_ma is not None:
-        if r_ma.group(1) == "y":
-            pbs_directives = r_re.sub("#SBATCH --requeue", pbs_directives)
-        elif r_ma.group(1) == "n":
-            pbs_directives = r_re.sub("#SBATCH --no-requeue", pbs_directives)
+    def _repl(m):
+        if m.group(1) == "":
+            warn("#PBS -r without argument -> dropped")
+            return ""
+        elif "y" == m.group(1):
+            return "#SBATCH --requeue"
+        elif "n" == m.group(1):
+            return "#SBATCH --no-requeue"
         else:
-            pbs_directives = r_re.sub("", pbs_directives)
-    return pbs_directives
+            return ""
+    return r_re.sub(_repl, pbs_directives)
 
 def fix_shell(pbs_directives):
     """drop #PBS -S"""
     s_re = re.compile(r'^#PBS[ \t]*-S[ \t]*(\S*)[^\n]*', re.M)
-    if s_re.search(pbs_directives) is not None:
-        pbs_directives = s_re.sub("", pbs_directives)
-        warn("Dropping #PBS -S directive; slurm scripts use shebang line")
-    return pbs_directives
+    def _repl(m):
+        info("#PBS -S: slurm uses #! to determine shell -> dropped")
+        return ""
+    return s_re.sub(_repl, pbs_directives)
 
 def fix_variable_export(pbs_directives):
     """translate #PBS -V and -v"""
     V_re = re.compile(r'^#PBS[ \t]*-V[^\n]*', re.M)
-    V_ma = V_re.search(pbs_directives)
-    if V_ma is not None:
-        pbs_directives = V_re.sub("#SBATCH --export=ALL", pbs_directives)
+    pbs_directives = V_re.sub("#SBATCH --export=ALL", pbs_directives)
     v_re = re.compile(r'^#PBS[ \t]*-v[ \t]*([ \t,=\S]*)[ \t]*', re.M)
-    v_ma = v_re.search(pbs_directives)
-    if v_ma is not None:
-        if v_ma.group(1) == "":
-            pbs_directives = v_re.sub("", pbs_directives)
-            warn("Removing empty #PBS -v: '{}".format(v_ma.group()))
+    def _repl(m):
+        if m.group(1) == "":
+            warn("#PBS -v withouot arguments -> dropped")
+            return ""
         else:
-            def _repl(m):
-                return "#SBATCH --export={}".format("".join(m.group(1).split()))
-            pbs_directives = v_re.sub(_repl, pbs_directives)
-    return pbs_directives
+            return "#SBATCH --export={}".format("".join(m.group(1).split()))
+    return v_re.sub(_repl, pbs_directives)
 
 def fix_jobarray(pbs_directives):
-    """drop #PBS -J"""
-    j_re = re.compile(r'^#PBS[ \t]*-J[^\n]*', re.M)
-    if j_re.search(pbs_directives) is not None:
-        warn("Dropping #PBS -J directive")
-        return j_re.sub("", pbs_directives)
-    else:
-        return pbs_directives
+    """translate #PBS -J"""
+    j_re = re.compile(r'^#PBS[ \t]*-J[ \t]*([-0-9]*)[^\n]*', re.M)
+    def _repl(m):
+        if m.group(1) == "":
+            warn("#PBS -J without argument -> dropped")
+            return ""
+        else:
+            return "#SBATCH --array={}".format(m.group(1))
+    return j_re.sub(_repl, pbs_directives)
 
 def fix_resource_list(pbs_directives):
     """resource lists were very complicated in the qsub wrapper, which would
@@ -266,7 +296,7 @@ def fix_queue(pbs_directives):
     """drop all occurences of -q"""
     q_re = re.compile(r'^#PBS[ \t]*-q[^\n]*', re.M)
     if q_re.search(pbs_directives) is not None:
-        warn("Dropping #PBS -q directive(s)")
+        info("dropping #PBS -q directive(s)")
         return q_re.sub("", pbs_directives)
     else:
         return pbs_directives
@@ -297,3 +327,30 @@ def convert_batch_script(pbs, interpreter = "/bin/bash"):
         return "{}\n{}\n{}".format(shebang, pbs_directives, commands)
     else:
         return "{}\n{}".format(shebang, commands)
+
+
+################################################################################
+# command line interface
+################################################################################
+
+if __name__ == "__main__":
+    import argparse
+    cmdline = argparse.ArgumentParser(description = __doc__,
+            formatter_class = argparse.RawDescriptionHelpFormatter)
+    cmdline.add_argument("--shell", "-s", default = "/bin/bash",
+            help = """Shell to insert if shebang line (#! ...) is missing.
+                      Defaults to '/bin/bash'""")
+    cmdline.add_argument("--version", "-v", action = "store_true",
+            default = False)
+    cmdline.add_argument("pbs_script", type=argparse.FileType('r'), nargs = "?",
+            default = sys.stdin)
+    args = cmdline.parse_args()
+    if args.version:
+        print("pbs2slurm V{}".format(__version__))
+        sys.exit(0)
+    if args.pbs_script.isatty():
+        print("Please provide a pbs batch script either on stdin or as an argument",
+                file = sys.stderr)
+        sys.exit(1)
+    slurm_script = convert_batch_script(args.pbs_script.read(), args.shell)
+    print(slurm_script)
