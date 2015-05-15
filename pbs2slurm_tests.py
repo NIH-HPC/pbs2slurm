@@ -7,11 +7,11 @@ sys.stderr = sys.stdout
 
 html = open("testcases.html", "w")
 
-def html_out(fh, ok, pbs, slurm, desc):
+def html_out(fh, pbs, slurm, desc):
     pbss = pbs.replace(">", "&gt;").replace("<", "&lt;")
     slurms = slurm.replace(">", "&gt;").replace("<", "&lt;")
     fh.write("""
-    <tr><td colspan=2>{desc}{ok}</td></tr>
+    <tr><td colspan=2>{desc}</td></tr>
     <tr><td>
             <pre class="term">{pbss}</pre>
         </td>
@@ -23,7 +23,6 @@ def html_out(fh, ok, pbs, slurm, desc):
 
 def html_header(fh):
     fh.write("""
-<div id="test_table">
 <table>
     <tr><th><b>PBS script</b></th>
         <th><b>SLURM script</b></th>
@@ -35,16 +34,14 @@ html_header(html)
 
 def check(input, exp, obs, desc):
     if exp != obs:
-        pf = """<span class="fail">FAIL</span>"""
-        html_out(html, pf, input, exp, desc)
         d = difflib.Differ()
         sys.stdout.writelines(d.compare(
             exp.splitlines(1),
             obs.splitlines(1)))
         assert False
     else:
-        pf = """<span class="ok">OK</span>"""
-        html_out(html, pf, input, exp, desc)
+        # only output testcases that pass
+        html_out(html, input, exp, desc)
         
 
 def test_plain_bash():
