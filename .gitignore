@@ -1,2 +1,5 @@
 *.pyc
 testcases.html
+doc_footer.html
+doc_header.html
+*.swp

@@ -8,14 +8,12 @@ sys.stderr = sys.stdout
 
 html = open("testcases.html", "w")
 
-
 def html_out(fh, ok, pbs, slurm, desc):
     pbss = pbs.replace(">", "&gt;").replace("<", "&lt;")
     slurms = slurm.replace(">", "&gt;").replace("<", "&lt;")
     fh.write("""
-    <tr><td colspan=3>{desc}</td></tr>
-    <tr><td>{ok}</td>
-        <td>
+    <tr><td colspan=2>{desc}{ok}</td></tr>
+    <tr><td>
             <pre class="term">{pbss}</pre>
         </td>
         <td>
@@ -25,49 +23,20 @@ def html_out(fh, ok, pbs, slurm, desc):
 """.format(**locals()))
 
 def html_header(fh):
-    fh.write("""<!DOCTYPE html>
-<head>
-<title>pbs2slurm test cases</title>
-<style>
-.term {
-    font-size: 12px;
-    font-family: monospace;
-    margin-left: 1em;
-    margin-right: 1em;
-    padding: 5px;
-    border: 1px solid #C0C0C0;
-    background-color: #DBDFDB;
-    #background-color: #e8e8ee; }
-td { vertical-align: top; }
-.ok { color: #4daf4a; font-weight: bold; }
-.fail { color: #e41a1c; font-weight: bold; }
-#test_table { width: 80%; min-width=600px; margin: 0 auto; }
-</style>
-</head>
-<body>
+    fh.write("""
 <div id="test_table">
-<table style="width: 90%; border: 0; padding: 5px">
-    <tr><th></th>
-        <th><b>PBS script</b></th>
+<table>
+    <tr><th><b>PBS script</b></th>
         <th><b>SLURM script</b></th>
     </tr>
 """)
 
-def html_footer(fh):
-    fh.write("""
-</table>
-</div>
-</body>
-</html>""")
-    fh.close()
-
 html_header(html)
-atexit.register(html_footer, html)
 
 
 def check(input, exp, obs, desc):
     if exp != obs:
-        pf = """<p class="fail">FAIL</p>"""
+        pf = """<span class="fail">FAIL</span>"""
         html_out(html, pf, input, exp, desc)
         d = difflib.Differ()
         sys.stdout.writelines(d.compare(
@@ -75,7 +44,7 @@ def check(input, exp, obs, desc):
             obs.splitlines(1)))
         assert False
     else:
-        pf = """<p class="ok">OK</p>"""
+        pf = """<span class="ok">OK</span>"""
         html_out(html, pf, input, exp, desc)
         
 
