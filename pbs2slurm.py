@@ -28,7 +28,7 @@ Examples:
     pbs2slurm pbs_script > slurm_script
     pbs2slurm -s /bin/zsh pbs_script > slurm_script
 
-See also https://hpc.cit.nih.gov/docs/pbs2slurm.html.
+See also https://hpc.cit.nih.gov/docs/pbs2slurm_tool.html.
 
 Contact staff@helix.nih.gov with questions and bug reports.
 """

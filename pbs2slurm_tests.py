@@ -23,7 +23,7 @@ def html_out(fh, pbs, slurm, desc):
 
 def html_header(fh):
     fh.write("""
-<table>
+<table id="test_output">
     <tr><th><b>PBS script</b></th>
         <th><b>SLURM script</b></th>
     </tr>
@@ -45,7 +45,7 @@ def check(input, exp, obs, desc):
         
 
 def test_plain_bash():
-    desc = "plain bash is unchanged"
+    desc = "Plain bash scripts remain unchanged"
     input = """#!/bin/bash
 set -e
 set -o pipefail
@@ -59,7 +59,7 @@ fastqc -d /scratch -f fastq --noextract some.fastq.gz
 ################################################################################
 # PBS environment variables
 def test_pbs_o_workdir():
-    desc = "change PBS_O_WORKDIR to SLURM_SUBMIT_DIR"
+    desc = "Change <tt>PBS_O_WORKDIR</tt> to <tt>SLURM_SUBMIT_DIR</tt>"
     input = """#!/bin/bash
 set -e
 set -o pipefail
@@ -84,7 +84,7 @@ fastqc -d /scratch -f fastq --noextract some.fastq.gz
 
 
 def test_pbs_jobid():
-    desc = "change PBS_JOBID to SLURM_JOBID"
+    desc = "Change <tt>PBS_JOBID</tt> to <tt>SLURM_JOBID</tt>"
     input = """#!/bin/bash
 set -e
 set -o pipefail
@@ -119,7 +119,7 @@ echo "Job $SLURM_JOBID done" >> logfile
 
 
 def test_pbs_arrayid():
-    desc  = "change PBS_ARRAYID to SLURM_ARRAY_TASK_ID"
+    desc  = "Change <tt>PBS_ARRAYID</tt> to <tt>SLURM_ARRAY_TASK_ID</tt>"
     input = """#! /bin/bash
 set -e
 set -o pipefail
@@ -151,7 +151,7 @@ gunzip -c sample${SLURM_ARRAY_TASK_ID}.fastq.gz \\
 ################################################################################
 # misc
 def test_missing_shebang():
-    desc = "insert missing shebang line"
+    desc = "If there is not shebang line, insert one (bash by default, can be changed)"
     input = """set -e
 set -o pipefail
 
@@ -168,7 +168,8 @@ cd /data/$USER/test_data
     check(input, expected, p2s.convert_batch_script(input), desc)
 
 def test_header_identification():
-    desc = "find pbs directives in headers with empty lines and comments"
+    desc = """PBS directives in the header are identified and transformed. PBS directives
+    in the body are left unchanged"""
     input = """#! /bin/bash
 #some other comment
 #PBS -N fastqc_job
@@ -177,6 +178,7 @@ def test_header_identification():
 set -e
 set -o pipefail
 
+#PBS -N other
 module load fastqc
 cd /data/$USER/test_data
 """
@@ -188,6 +190,7 @@ cd /data/$USER/test_data
 set -e
 set -o pipefail
 
+#PBS -N other
 module load fastqc
 cd /data/$USER/test_data
 """
@@ -196,7 +199,7 @@ cd /data/$USER/test_data
 ################################################################################
 # job name
 def test_jobname():
-    desc = "change #PBS -N to #SBATCH --job-name"
+    desc = "Change <tt>#PBS -N</tt> to <tt>#SBATCH --job-name</tt>"
     input = """#! /bin/bash
 #PBS -N fastqc_job
 set -e
@@ -214,7 +217,7 @@ module load fastqc
     check(input, expected, p2s.convert_batch_script(input), desc)
 
 def test_jobname_empty():
-    desc = "drop #PBS -N when no job name is given"
+    desc = "<tt>#PBS -N</tt> is dropped if job name is missing"
     input = """#! /bin/bash
 #PBS -N 
 set -e
@@ -234,7 +237,7 @@ module load fastqc
 ################################################################################
 # email address
 def test_valid_email_address():
-    desc = "Change #PBS -M directive to #SBATCH --mail-user [valid email]"
+    desc = "Change </tt>#PBS -M</tt> to <tt>#SBATCH --mail-user</tt>"
     input = """#! /bin/bash
 #PBS -M student@helix.nih.gov
 set -e
@@ -252,7 +255,7 @@ module load fastqc
     check(input, expected, p2s.convert_batch_script(input), desc)
 
 def test_empty_email_address():
-    desc = "drop empty #PBS -M"
+    desc = "<tt>#PBS -M</tt> is dropped if email address is missing"
     input = """#! /bin/bash
 #PBS -M 
 set -e
@@ -269,7 +272,7 @@ module load fastqc
 """
     check(input, expected, p2s.convert_batch_script(input), desc)
 def test_multiple_email_addresses():
-    desc = "Change #PBS -M directive to #SBATCH --mail-user [multiple emails]"
+    desc = "If <tt>#PBS -M</tt> has a list of valid email addresses, pick first one"
     input = """#! /bin/bash
 #PBS -M student@helix.nih.gov,teacher@helix.nih.gov
 set -e
@@ -287,7 +290,7 @@ module load fastqc
     check(input, expected, p2s.convert_batch_script(input), desc)
 
 def test_multiple_email_addresses2():
-    desc = "Change #PBS -M directive to #SBATCH --mail-user [multiple emails]"
+    desc = "If <tt>#PBS -M</tt> has a list of email addresses, pick first valid one"
     input = """#! /bin/bash
 #PBS -M student,teacher@helix.nih.gov
 set -e
@@ -307,7 +310,7 @@ module load fastqc
 ################################################################################
 # email mode 
 def test_email_modes_n():
-    desc = "Change #PBS -m email modes: n; this is the slurm default"
+    desc = "Drop <tt>#PBS -m n</tt> email modes since this is the default behaviour for Slurm"
     input = """#! /bin/bash
 #PBS -m n
 
@@ -321,7 +324,7 @@ module load bowtie
     check(input, expected, p2s.convert_batch_script(input), desc)
 
 def test_email_modes_a():
-    desc = "Change #PBS -m email modes: a"
+    desc = "Change <tt>#PBS -m a</tt> to <tt>#SBATCH --mail-type=FAIL</tt>"
     input = """#! /bin/bash
 #PBS -m a
 
@@ -335,7 +338,7 @@ module load bowtie
     check(input, expected, p2s.convert_batch_script(input), desc)
 
 def test_email_modes_b():
-    desc = "Change #PBS -m email modes: b"
+    desc = "Change <tt>#PBS -m b</tt> to <tt>#SBATCH --mail-type=BEGIN</tt>"
     input = """#! /bin/bash
 #PBS -m b
 
@@ -349,7 +352,7 @@ module load bowtie
     check(input, expected, p2s.convert_batch_script(input), desc)
 
 def test_email_modes_e():
-    desc = "Change #PBS -m email modes: e"
+    desc = "Change <tt>#PBS -m e</tt> to <tt>#SBATCH --mail-type=END</tt>"
     input = """#! /bin/bash
 #PBS -m e
 
@@ -363,7 +366,7 @@ module load bowtie
     check(input, expected, p2s.convert_batch_script(input), desc)
 
 def test_email_modes_be():
-    desc = "Change #PBS -m email modes: be"
+    desc = "Change <tt>#PBS -m be|eb</tt> to <tt>#SBATCH --mail-type=BEGIN,END</tt>"
     input = """#! /bin/bash
 #PBS -m be
 
@@ -377,6 +380,7 @@ module load bowtie
     check(input, expected, p2s.convert_batch_script(input), desc)
 
 def test_email_modes_abe():
+    desc = "Change <tt>#PBS -m abe|aeb|...</tt> to <tt>#SBATCH --mail-type=BEGIN,END,FAIL</tt>"
     desc = "Change #PBS -m email modes: abe"
     input = """#! /bin/bash
 #PBS -m abe
@@ -391,7 +395,7 @@ module load bowtie
     check(input, expected, p2s.convert_batch_script(input), desc)
 
 def test_email_modes_aben():
-    desc = "Change #PBS -m email modes: aben"
+    desc = "If <tt>#PBS -m<tt> contains n in addition to other options, n has precedence since it's our Slurm default"
     input = """#! /bin/bash
 #PBS -m aben
 
@@ -405,7 +409,7 @@ module load bowtie
     check(input, expected, p2s.convert_batch_script(input), desc)
 
 def test_email_modes_empty():
-    desc = "Change #PBS -m email modes: <empty>"
+    desc = "<tt>#PBS -m</tt> is dropped if email mode is missing"
     input = """#! /bin/bash
 #PBS -m 
 
@@ -420,7 +424,7 @@ module load bowtie
 ################################################################################
 # stderr and stdout files
 def test_keep_directive_ignored():
-    desc = "Remove #PBS -k directives"
+    desc = "<tt>#PBS -k</tt> is dropped since it is not necessary for Slurm"
     input = """#! /bin/bash
 #PBS -k oe
 
@@ -441,7 +445,7 @@ module load fastqc
 
 
 def test_join_directive_ignored_eo():
-    desc = "Remove #PBS -j directives [join is default in slurm]"
+    desc = "<tt>#PBS -j</tt> is dropped since joining stdout and stderr is the default in Slurm"
     input = """#! /bin/bash
 #PBS -j eo
 
@@ -460,28 +464,8 @@ module load fastqc
 """
     check(input, expected, p2s.convert_batch_script(input), desc)
 
-def test_join_directive_ignored_oe():
-    desc = "Remove #PBS -j directives [join is default in slurm]"
-    input = """#! /bin/bash
-#PBS -j oe
-
-set -e
-set -o pipefail
-
-module load fastqc
-"""
-    expected = """#! /bin/bash
-
-
-set -e
-set -o pipefail
-
-module load fastqc
-"""
-    check(input, expected, p2s.convert_batch_script(input), desc)
-
 def test_stdout_directive():
-    desc = "Change #PBS -o directive to #SBATCH --output"
+    desc = "Change <tt>#PBS -o</tt> to <tt>#SBATCH --output</tt>"
     input = """#! /bin/bash
 #PBS -o /path/to/some/file
 
@@ -501,7 +485,7 @@ module load fastqc
     check(input, expected, p2s.convert_batch_script(input), desc)
 
 def test_empty_stdout_directive():
-    desc = "Drop #PBS -o directive without argument"
+    desc = "<tt>#PBS -o</tt> is dropped if output path is missing"
     input = """#! /bin/bash
 #PBS -o 
 
@@ -522,7 +506,7 @@ module load fastqc
 
 
 def test_stderr_directive():
-    desc = "Change #PBS -e directive to #SBATCH --error"
+    desc = "Change <tt>#PBS -e</tt> to <tt>#SBATCH --error</tt>"
     input = """#! /bin/bash
 #PBS -e /path/to/some/file
 
@@ -542,7 +526,7 @@ module load fastqc
     check(input, expected, p2s.convert_batch_script(input), desc)
 
 def test_empty_stderr_directive():
-    desc = "Drop #PBS -e directive without argument"
+    desc = "<tt>#PBS -e</tt> is dropped if error path is missing"
     input = """#! /bin/bash
 #PBS -e
 
@@ -564,7 +548,7 @@ module load fastqc
 # restartable
 
 def test_restartable_directive_y():
-    desc = "Change #PBS -r directive to #SBATCH --[no]-requeue"
+    desc = "Change <tt>#PBS -r y</tt> to <tt>#SBATCH --requeue</tt>"
     input = """#! /bin/bash
 #PBS -r y 
 
@@ -584,7 +568,7 @@ module load fastqc
     check(input, expected, p2s.convert_batch_script(input), desc)
 
 def test_restartable_directive_n():
-    desc = "Change #PBS -r directive to #SBATCH --[no]-requeue"
+    desc = "Change <tt>#PBS -r n</tt> to <tt>#SBATCH --no-requeue</tt>"
     input = """#! /bin/bash
 #PBS -r n 
 
@@ -604,7 +588,7 @@ module load fastqc
     check(input, expected, p2s.convert_batch_script(input), desc)
 
 def test_restartable_directive_bad():
-    desc = "Remove malformed #PBS -r directive"
+    desc = "<tt>#PBS -r</tt> is dropped if any other argument is detected or the argument is missing"
     input = """#! /bin/bash
 #PBS -r fnord 
 
@@ -627,7 +611,7 @@ module load fastqc
 # shell
 
 def test_drop_shell_directive():
-    desc = "Drop #PBS -S directive"
+    desc = "<tt>#PBS -S</tt> is dropped since Slurm uses shebang lines to determine the interpreter"
     input = """#! /bin/bash
 #PBS -S /bin/bash
 
@@ -650,8 +634,7 @@ module load fastqc
 # export environment variables
 
 def test_export_whole_env():
-    desc = "Change #PBS -V directive to #SBATCH --export=ALL; kept even \
-            though this is the default for slurm. makes it explicit."
+    desc = "Change <tt>#PBS -V</tt> to <tt>#SBATCH --export=ALL</tt> (even though this is the Slurm default"
     input = """#! /bin/bash
 #PBS -V
 
@@ -671,7 +654,7 @@ module load fastqc
     check(input, expected, p2s.convert_batch_script(input), desc)
 
 def test_export_individual_variables_1():
-    desc = "Change #PBS -v directive to #SBATCH --export="
+    desc = "Change <tt>#PBS -v</tt> to <tt>#SBATCH --export=</tt>"
     input = """#! /bin/bash
 #PBS -v np=300
 
@@ -691,7 +674,7 @@ module load fastqc
     check(input, expected, p2s.convert_batch_script(input), desc)
 
 def test_export_individual_variables_2():
-    desc = "Change #PBS -v directive to #SBATCH --export=; removes spaces"
+    desc = "Change <tt>#PBS -v</tt> to <tt>#SBATCH --export=</tt>; remove spaces"
     input = """#! /bin/bash
 #PBS -v np=300, fnord=1
 
@@ -711,7 +694,7 @@ module load fastqc
     check(input, expected, p2s.convert_batch_script(input), desc)
 
 def test_export_individual_variables_2():
-    desc = "Change #PBS -v directive to #SBATCH --export=; "
+    desc = "Change <tt>#PBS -v</tt> to <tt>#SBATCH --export=</tt>; remove spaces"
     input = """#! /bin/bash
 #PBS -V
 #PBS -v np=300, fnord=1
@@ -738,7 +721,7 @@ module load fastqc
 # job array
 
 def test_fix_job_array():
-    desc = "translate #PBS -J to #SBATCH --array" 
+    desc = "Change <tt>#PBS -J</tt> to <tt>#SBATCH --array</tt>" 
     input = """#! /bin/bash
 #PBS -J 1-20
 
@@ -758,7 +741,7 @@ module load fastqc
     check(input, expected, p2s.convert_batch_script(input), desc)
 
 def test_drop_empty_job_array():
-    desc = "drops #PBS -J without argument" 
+    desc = "<tt>#PBS -J</tt> is dropped if argument is missing"
     input = """#! /bin/bash
 #PBS -J  
 
@@ -783,7 +766,7 @@ module load fastqc
 # the qsub wrapper script
 
 def test_resources():
-    desc = "test parsing of resource lists that occured in the wild" 
+    desc = "The only thing parsed out of <tt>PBS -l</tt> resource lists is walltime"
     input = """#! /bin/bash
 #PBS -l jobfs=500MB
 #PBS -l ncpus=1
@@ -842,7 +825,7 @@ module load fastqc
 # actually valid queues. drop -q lines
 
 def test_drop_queue():
-    desc = "Drop #PBS -q" 
+    desc = "Drop <tt>#PBS -q</tt> since there is not reliable, straight forward translation. Please provide partition on the command line" 
     input = """#! /bin/bash
 #PBS -q serial
 #PBS -q batch
@@ -869,9 +852,9 @@ module load fastqc
 
 
 ################################################################################
-# real world examples
+# complete examples
 def test_script1():
-    desc = "real world example 1"
+    desc = "Complete example 1"
     input = """#!/bin/csh -v
 #PBS -N germline
 #PBS -m be
@@ -902,17 +885,16 @@ EOF
 
 
 def test_script2():
-    desc = "real world example 2"
+    desc = "Complete example 2"
     input = """#! /bin/bash
 #PBS -N H3K27me3
 #PBS -m e
 #PBS -k n
-cd /data/$USER/110617/preB/tss_table
+cd ${PBS_O_WORKDIR}
 
 # non redundant
-slopBed -i preB_H3K27me3-removed.bed -g mm9.genome \\
-        -r 126 -s -l 0     \\
-    | intersectBed -a stdin -b refseq110201_tss_ud1k.bed -wa -wb \\
+slopBed -i H3K27me3.bed -g mm9.genome -r 126 -s -l 0  \\
+    | intersectBed -a stdin -b refseq_tss.bed -wa -wb \\
     | awk '$2 != c {print; c = $2}'      \\
     | cut -f10     \\
     | sort -S1G    \\
@@ -924,12 +906,11 @@ slopBed -i preB_H3K27me3-removed.bed -g mm9.genome \\
 #SBATCH --job-name="H3K27me3"
 #SBATCH --mail-type=END
 
-cd /data/$USER/110617/preB/tss_table
+cd ${SLURM_SUBMIT_DIR}
 
 # non redundant
-slopBed -i preB_H3K27me3-removed.bed -g mm9.genome \\
-        -r 126 -s -l 0     \\
-    | intersectBed -a stdin -b refseq110201_tss_ud1k.bed -wa -wb \\
+slopBed -i H3K27me3.bed -g mm9.genome -r 126 -s -l 0  \\
+    | intersectBed -a stdin -b refseq_tss.bed -wa -wb \\
     | awk '$2 != c {print; c = $2}'      \\
     | cut -f10     \\
     | sort -S1G    \\
@@ -940,9 +921,9 @@ slopBed -i preB_H3K27me3-removed.bed -g mm9.genome \\
     check(input, expected, p2s.convert_batch_script(input), desc)
 
 def test_script3():
-    desc = "real world example 3"
-    input = """# This is a sample PBS script. It will request 
-# 1 processor on 1 node
+    desc = "Complete example 3"
+    input = """# This is a sample PBS script. It will 
+# request 1 processor on 1 node
 # for 4 hours.
 #PBS -l nodes=1:ppn=1
 #   Request 4 hours of walltime
@@ -954,22 +935,22 @@ def test_script3():
 #
 #   The following is the body of the script. By default,
 #   PBS scripts execute in your home directory, not the
-#   directory from which they were submitted. The following
-#   line places you in the directory from which the job
-#   was submitted.
+#   directory from which they were submitted. The 
+#   following line places you in the directory from 
+#   which the job was submitted.
 #
 cd $PBS_O_WORKDIR
 #
-#   Now we want to run the program "hello".  "hello" is in
-#   the directory that this script is being submitted from,
+#   Now we want to run the program "hello" from
 #   $PBS_O_WORKDIR.
 #
 echo "Job started on `hostname` at `date`"
+./hello
 echo "Job Ended at `date`"
     """
     expected = """#! /bin/bash
-# This is a sample PBS script. It will request 
-# 1 processor on 1 node
+# This is a sample PBS script. It will 
+# request 1 processor on 1 node
 # for 4 hours.
 
 #   Request 4 hours of walltime
@@ -981,27 +962,27 @@ echo "Job Ended at `date`"
 #
 #   The following is the body of the script. By default,
 #   PBS scripts execute in your home directory, not the
-#   directory from which they were submitted. The following
-#   line places you in the directory from which the job
-#   was submitted.
+#   directory from which they were submitted. The 
+#   following line places you in the directory from 
+#   which the job was submitted.
 #
 cd $SLURM_SUBMIT_DIR
 #
-#   Now we want to run the program "hello".  "hello" is in
-#   the directory that this script is being submitted from,
+#   Now we want to run the program "hello" from
 #   $SLURM_SUBMIT_DIR.
 #
 echo "Job started on `hostname` at `date`"
+./hello
 echo "Job Ended at `date`"
     """
     check(input, expected, p2s.convert_batch_script(input), desc)
 
 def test_script4():
-    desc = "real world example 4"
+    desc = "Complete example 4"
     input = """#!/bin/bash -l
 #PBS -l walltime=8:00:00,nodes=3:ppn=8,pmem=1000mb
 #PBS -m abe
-#PBS -M sample_email@umn.edu
+#PBS -M sample_email@floyd.edu
 
 cd ~/program_directory
 module load intel
@@ -1011,7 +992,7 @@ mpirun -np 24 program_name < inputfile > outputfile
     expected = """#!/bin/bash -l
 #SBATCH --time=8:00:00
 #SBATCH --mail-type=BEGIN,END,FAIL
-#SBATCH --mail-user="sample_email@umn.edu"
+#SBATCH --mail-user="sample_email@floyd.edu"
 
 cd ~/program_directory
 module load intel
@@ -1020,51 +1001,3 @@ mpirun -np 24 program_name < inputfile > outputfile
     """
     check(input, expected, p2s.convert_batch_script(input), desc)
 
-def test_script5():
-    desc = "real world example 5"
-    input = """# declare a name for this job to be sample_job
-#PBS -N my_serial_job  
-# request the queue (enter the possible names, if omitted, 
-# serial is the default)
-#PBS -q serial     
-# request 1 node
-#PBS -l nodes=1
-# request 4 hours and 30 minutes of cpu time
-#PBS -l cput=04:30:00        
-# mail is sent to you when the job starts and when it 
-# terminates or aborts
-#PBS -m bea
-# specify your email address
-#PBS -M John.Smith@dartmouth.edu
-# By default, PBS scripts execute in your home directory, not the 
-# directory from which they were submitted. The following line 
-# places you in the directory from which the job was submitted.  
-cd $PBS_O_WORKDIR
-# run the program
-/path_to_executable/program_name arg1 arg2 ...
-exit 0
-    """
-    expected = """#! /bin/bash
-# declare a name for this job to be sample_job
-#SBATCH --job-name="my_serial_job"
-# request the queue (enter the possible names, if omitted, 
-# serial is the default)
-
-# request 1 node
-
-# request 4 hours and 30 minutes of cpu time
-
-# mail is sent to you when the job starts and when it 
-# terminates or aborts
-#SBATCH --mail-type=BEGIN,END,FAIL
-# specify your email address
-#SBATCH --mail-user="John.Smith@dartmouth.edu"
-# By default, PBS scripts execute in your home directory, not the 
-# directory from which they were submitted. The following line 
-# places you in the directory from which the job was submitted.  
-cd $SLURM_SUBMIT_DIR
-# run the program
-/path_to_executable/program_name arg1 arg2 ...
-exit 0
-    """
-    check(input, expected, p2s.convert_batch_script(input), desc)
