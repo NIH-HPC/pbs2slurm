@@ -119,7 +119,7 @@ echo "Job $SLURM_JOBID done" >> logfile
 
 
 def test_pbs_arrayid():
-    desc  = "Change <tt>PBS_ARRAYID</tt> to <tt>SLURM_ARRAY_TASK_ID</tt>"
+    desc  = "Change <tt>PBS_ARRAY_INDEX</tt> to <tt>SLURM_ARRAY_TASK_ID</tt>"
     input = """#! /bin/bash
 set -e
 set -o pipefail
@@ -127,11 +127,11 @@ set -o pipefail
 module load fastqc
 cd /data/$USER/test_data
 module load bowtie/1.1.1 samtools/1.2
-gunzip -c sample${PBS_ARRAYID}.fastq.gz \\
+gunzip -c sample${PBS_ARRAY_INDEX}.fastq.gz \\
    | bowtie --sam --best --strata --all -m1 -n2 \\
        --threads=10 /path/to/genome/index -  \\
    | samtools view -Sb -F4 - \\
-   > sample${PBS_ARRAYID}.bam
+   > sample${PBS_ARRAY_INDEX}.bam
 """
     expected = """#! /bin/bash
 set -e
