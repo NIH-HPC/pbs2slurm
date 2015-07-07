@@ -81,7 +81,7 @@ def fix_env_vars(input):
     repl = {
         "PBS_O_WORKDIR": "SLURM_SUBMIT_DIR",
         "PBS_JOBID"    : "SLURM_JOBID",
-        "PBS_ARRAYID"  : "SLURM_ARRAY_TASK_ID"}
+        "PBS_ARRAY_INDEX"  : "SLURM_ARRAY_TASK_ID"}
     output = input
     for pbs, slurm in repl.items():
         output = output.replace(pbs, slurm)

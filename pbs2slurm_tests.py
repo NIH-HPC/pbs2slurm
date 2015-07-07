@@ -119,7 +119,7 @@ echo "Job $SLURM_JOBID done" >> logfile
 
 
 def test_pbs_arrayid():
-    desc  = "Change <tt>PBS_ARRAYID</tt> to <tt>SLURM_ARRAY_TASK_ID</tt>"
+    desc  = "Change <tt>PBS_ARRAY_INDEX</tt> to <tt>SLURM_ARRAY_TASK_ID</tt>"
     input = """#! /bin/bash
 set -e
 set -o pipefail
@@ -127,11 +127,11 @@ set -o pipefail
 module load fastqc
 cd /data/$USER/test_data
 module load bowtie/1.1.1 samtools/1.2
-gunzip -c sample${PBS_ARRAYID}.fastq.gz \\
+gunzip -c sample${PBS_ARRAY_INDEX}.fastq.gz \\
    | bowtie --sam --best --strata --all -m1 -n2 \\
        --threads=10 /path/to/genome/index -  \\
    | samtools view -Sb -F4 - \\
-   > sample${PBS_ARRAYID}.bam
+   > sample${PBS_ARRAY_INDEX}.bam
 """
     expected = """#! /bin/bash
 set -e
@@ -395,7 +395,7 @@ module load bowtie
     check(input, expected, p2s.convert_batch_script(input), desc)
 
 def test_email_modes_aben():
-    desc = "If <tt>#PBS -m<tt> contains n in addition to other options, n has precedence since it's our Slurm default"
+    desc = "If <tt>#PBS -m</tt> contains n in addition to other options, n has precedence since it's Slurm's default"
     input = """#! /bin/bash
 #PBS -m aben
 
@@ -893,14 +893,14 @@ def test_script2():
 cd ${PBS_O_WORKDIR}
 
 # non redundant
-slopBed -i H3K27me3.bed -g mm9.genome -r 126 -s -l 0  \\
-    | intersectBed -a stdin -b refseq_tss.bed -wa -wb \\
+slopBed -i K27me3.bed -g mm9.genome -r 126 -s -l 0  \\
+    | intersectBed -a stdin -b refseqTss.bed -wa -wb\\
     | awk '$2 != c {print; c = $2}'      \\
     | cut -f10     \\
     | sort -S1G    \\
     | uniq -c     \\
     | sed -r 's/^ +//;s/ /|/'     \\
-    > count_data/H3K27me3.nr.ncount
+    > count_data/K27me3.nr.ncount
     """
     expected = """#! /bin/bash
 #SBATCH --job-name="H3K27me3"
@@ -909,14 +909,14 @@ slopBed -i H3K27me3.bed -g mm9.genome -r 126 -s -l 0  \\
 cd ${SLURM_SUBMIT_DIR}
 
 # non redundant
-slopBed -i H3K27me3.bed -g mm9.genome -r 126 -s -l 0  \\
-    | intersectBed -a stdin -b refseq_tss.bed -wa -wb \\
+slopBed -i K27me3.bed -g mm9.genome -r 126 -s -l 0  \\
+    | intersectBed -a stdin -b refseqTss.bed -wa -wb\\
     | awk '$2 != c {print; c = $2}'      \\
     | cut -f10     \\
     | sort -S1G    \\
     | uniq -c     \\
     | sed -r 's/^ +//;s/ /|/'     \\
-    > count_data/H3K27me3.nr.ncount
+    > count_data/K27me3.nr.ncount
     """
     check(input, expected, p2s.convert_batch_script(input), desc)
 
@@ -929,21 +929,12 @@ def test_script3():
 #   Request 4 hours of walltime
 #PBS -l walltime=4:00:00
 #PBS -l pmem=1gb
-#   Request that regular output and terminal output go 
+#   Request that stdout and stderr go
 #   to the same file
 #PBS -j oe
 #
-#   The following is the body of the script. By default,
-#   PBS scripts execute in your home directory, not the
-#   directory from which they were submitted. The 
-#   following line places you in the directory from 
-#   which the job was submitted.
-#
+# ======== BODY ========
 cd $PBS_O_WORKDIR
-#
-#   Now we want to run the program "hello" from
-#   $PBS_O_WORKDIR.
-#
 echo "Job started on `hostname` at `date`"
 ./hello
 echo "Job Ended at `date`"
@@ -956,21 +947,12 @@ echo "Job Ended at `date`"
 #   Request 4 hours of walltime
 #SBATCH --time=4:00:00
 
-#   Request that regular output and terminal output go 
+#   Request that stdout and stderr go
 #   to the same file
 
 #
-#   The following is the body of the script. By default,
-#   PBS scripts execute in your home directory, not the
-#   directory from which they were submitted. The 
-#   following line places you in the directory from 
-#   which the job was submitted.
-#
+# ======== BODY ========
 cd $SLURM_SUBMIT_DIR
-#
-#   Now we want to run the program "hello" from
-#   $SLURM_SUBMIT_DIR.
-#
 echo "Job started on `hostname` at `date`"
 ./hello
 echo "Job Ended at `date`"
