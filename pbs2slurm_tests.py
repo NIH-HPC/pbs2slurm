@@ -3,10 +3,6 @@ import sys
 import atexit
 import difflib
 
-sys.stderr = sys.stdout
-
-html = open("testcases.html", "w")
-
 def html_out(fh, pbs, slurm, desc):
     pbss = pbs.replace(">", "&gt;").replace("<", "&lt;")
     slurms = slurm.replace(">", "&gt;").replace("<", "&lt;")
@@ -23,14 +19,28 @@ def html_out(fh, pbs, slurm, desc):
 
 def html_header(fh):
     fh.write("""
-<table id="test_output">
-    <tr><th><b>PBS script</b></th>
-        <th><b>SLURM script</b></th>
-    </tr>
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+      <meta charset="utf-8">
+      <title>pbs2slurm test cases</title>
+      <style>pre.term {background-color: #eee; padding: 3px 5px; border: 1px solid #999}</style>
+  </head>
+  <body>
+    <!-- START page content -->
+    <table id="test_output">
+        <tr><th><b>PBS script</b></th>
+            <th><b>SLURM script</b></th>
+        </tr>
 """)
 
-html_header(html)
-
+def html_footer(fh):
+    fh.write("""
+    </table>
+    <!-- END page content -->
+  </body>
+</html>
+""")
 
 def check(input, exp, obs, desc):
     if exp != obs:
@@ -983,3 +993,57 @@ mpirun -np 24 program_name < inputfile > outputfile
     """
     check(input, expected, p2s.convert_batch_script(input), desc)
 
+if __name__ == '__main__':
+    # this is a pretty stupid way of doing this - should have used a testing
+    # framework
+    testfunctions = (
+        test_plain_bash,
+        test_pbs_o_workdir,
+        test_pbs_jobid,
+        test_pbs_arrayid,
+        test_missing_shebang,
+        test_header_identification,
+        test_jobname,
+        test_jobname_empty,
+        test_valid_email_address,
+        test_empty_email_address,
+        test_multiple_email_addresses,
+        test_multiple_email_addresses2,
+        test_email_modes_n,
+        test_email_modes_a,
+        test_email_modes_b,
+        test_email_modes_e,
+        test_email_modes_be,
+        test_email_modes_abe,
+        test_email_modes_aben,
+        test_email_modes_empty,
+        test_keep_directive_ignored,
+        test_join_directive_ignored_eo,
+        test_stdout_directive,
+        test_empty_stdout_directive,
+        test_stderr_directive,
+        test_empty_stderr_directive,
+        test_restartable_directive_y,
+        test_restartable_directive_n,
+        test_restartable_directive_bad,
+        test_drop_shell_directive,
+        test_export_whole_env,
+        test_export_individual_variables_1,
+        test_export_individual_variables_2,
+        test_export_individual_variables_2,
+        test_fix_job_array,
+        test_drop_empty_job_array,
+        test_resources,
+        test_drop_queue,
+        test_script1,
+        test_script2,
+        test_script3,
+        test_script4,
+    )
+    sys.stderr = sys.stdout
+    html = open("testcases.html", "w")
+    html_header(html)
+    for testf in testfunctions:
+        testf()
+    html_footer(html)
+    html.close()

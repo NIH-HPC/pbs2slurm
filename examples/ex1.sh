@@ -3,11 +3,10 @@
 #PBS -N
 #PBS -k n
 #PBS -m n
-#PBS -M somebody@helix.nih.gov
+#PBS -M somebody@somewhere.net
 #PBS -j oe
 #PBS -o /path/to/output
 #PBS -V
-# parameter sweep for swembl using wt CTCFab
 
 
 function sw()  {
