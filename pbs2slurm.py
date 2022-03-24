@@ -1,4 +1,4 @@
-#! /usr/local/bin/python
+#! /usr/bin/env python3
 # vim: set ft=python :
 """
 Translates PBS batch script to Slurm.
@@ -21,11 +21,12 @@ Please be sure to manually go over translated scripts to ensure their
 correctness.
 
 If no input file is specified, pbs2slurm reads from stdin. The translated script 
-is written to stdout.
+is written to stdout or to a new file
 
 Examples:
     pbs2slurm < pbs_script > slurm_script
     pbs2slurm pbs_script > slurm_script
+    pbs2slurm pbs_script slurm_script
     pbs2slurm -s /bin/zsh pbs_script > slurm_script
 
 See also https://hpc.cit.nih.gov/docs/pbs2slurm_tool.html.
@@ -37,7 +38,7 @@ from __future__ import print_function
 import sys
 import re
 
-__version__ = 0.1
+__version__ = 0.2
 __author__ = "Wolfgang Resch"
 
 def info(s):
@@ -231,9 +232,7 @@ def fix_resource_list(pbs_directives):
     if l_m is not None:
         def _repl(m):
             resources = m.group(1)
-            if not "walltime" in resources:
-                return ""
-            else:
+            if "walltime" in resources:
                 wt_m = wt_re.search(resources)
                 if wt_m is None:
                     return ""
@@ -249,8 +248,26 @@ def fix_resource_list(pbs_directives):
                 elif len(s) > 2:
                     return ""
                 return "#SBATCH --time={}:{}:{}".format(h, m, s)
+            elif "nodes" in resources:
+                mydir = ''
+                rlist = resources.split(':')
+                for rx in rlist:
+                   cx = rx.split(',')
+                   for nx in cx:
+                       mx = nx.split('=')
+                       if mx[0] == 'nodes':
+                           mydir = "#SBATCH --ntasks={}".format(mx[1].strip())
+                       elif mx[0] == 'ppn':
+                           mydir = mydir + "\n#SBATCH --cpus-per-task={}".format(mx[1].strip())
+                       elif mx[0] == 'pmem': 
+                           mydir = mydir + "\n#SBATCH --mem-per-cpu={}".format(mx[1].strip())
+
+                return mydir
+            else: 
+                return ""
         pbs_directives = l_re.sub(_repl, pbs_directives)
-   
+    wt_re = re.compile(r'nodes=')
+        
     return pbs_directives
 
 
@@ -306,6 +323,8 @@ if __name__ == "__main__":
             default = False)
     cmdline.add_argument("pbs_script", type=argparse.FileType('r'), nargs = "?",
             default = sys.stdin)
+    cmdline.add_argument("slurm_script", type=argparse.FileType('w'), nargs = "?",
+            default = sys.stdout)
     args = cmdline.parse_args()
     if args.version:
         print("pbs2slurm V{}".format(__version__))
@@ -314,5 +333,8 @@ if __name__ == "__main__":
         print("Please provide a pbs batch script either on stdin or as an argument",
                 file = sys.stderr)
         sys.exit(1)
-    slurm_script = convert_batch_script(args.pbs_script.read(), args.shell)
-    print(slurm_script)
+    slurm_out = convert_batch_script(args.pbs_script.read(), args.shell)
+    if args.slurm_script:
+        args.slurm_script.write(slurm_out)
+    else:
+        print(slurm_out)
