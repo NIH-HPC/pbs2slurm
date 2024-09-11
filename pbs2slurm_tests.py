@@ -94,7 +94,7 @@ fastqc -d /scratch -f fastq --noextract some.fastq.gz
 
 
 def test_pbs_jobid():
-    desc = "Change <tt>PBS_JOBID</tt> to <tt>SLURM_JOBID</tt>"
+    desc = "Change <tt>PBS_JOBID</tt> to <tt>SLURM_JOB_ID</tt>"
     input = """#!/bin/bash
 set -e
 set -o pipefail
@@ -116,14 +116,14 @@ set -o pipefail
 
 module load fastxtoolkit
 cd /data/$USER/test_data
-echo "Job $SLURM_JOBID starting" > logfile
+echo "Job $SLURM_JOB_ID starting" > logfile
 zcat some.fq.gz \\
   | tr '.' 'N' \\
   | fastx_artifacts_filter  \\
   | fastx_clipper -a AGATCGGAAGAGC  \\
   | fastq_quality_trimmer -t 20 -l 10 -z  \\
   > some.clean.fq.gz
-echo "Job $SLURM_JOBID done" >> logfile
+echo "Job $SLURM_JOB_ID done" >> logfile
 """
     check(input, expected, p2s.convert_batch_script(input), desc)
 

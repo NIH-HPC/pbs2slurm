@@ -33,7 +33,6 @@ See also https://hpc.cit.nih.gov/docs/pbs2slurm_tool.html.
 Contact staff@helix.nih.gov with questions and bug reports.
 """
 
-from __future__ import print_function
 import sys
 import re
 
@@ -41,17 +40,17 @@ __version__ = 0.1
 __author__ = "Wolfgang Resch"
 
 def info(s):
-    print("INFO:    {}".format(s), file=sys.stderr)
+    print(f"INFO:    {s}", file=sys.stderr)
 def warn(s):
-    print("WARNING: {}".format(s), file=sys.stderr)
+    print(f"WARNING: {s}", file=sys.stderr)
 def error(s):
-    print("ERROR:   {}".format(s), file=sys.stderr)
+    print(f"ERROR:   {s}", file=sys.stderr)
 
-def split_script(input):
+def split_script(input_str):
     """splits script into shebang, pbs directives, and rest"""
-    lines = input.split("\n")
+    lines = input_str.split("\n")
     nlines = len(lines)
-    i = 0    
+    i = 0
     if lines[0].startswith("#!"):
         shebang = lines[0]
         i = 1
@@ -69,20 +68,17 @@ def split_script(input):
             break
     if not header:
         return shebang, "", "\n".join(lines[i:])
-    else:
-        has_pbs = False
-        if len([x for x in header if x.startswith("#PBS")]) > 0: 
-            return shebang, "\n".join(header), "\n".join(lines[i:])
-        else:
-            return shebang, "", "\n".join(header + lines[i:])
+    if len([x for x in header if x.startswith("#PBS")]) > 0:
+        return shebang, "\n".join(header), "\n".join(lines[i:])
+    return shebang, "", "\n".join(header + lines[i:])
 
-def fix_env_vars(input):
+def fix_env_vars(input_str):
     """replace PBS environment variables with their SLURM equivalent"""
     repl = {
         "PBS_O_WORKDIR": "SLURM_SUBMIT_DIR",
-        "PBS_JOBID"    : "SLURM_JOBID",
+        "PBS_JOBID"    : "SLURM_JOB_ID",
         "PBS_ARRAY_INDEX"  : "SLURM_ARRAY_TASK_ID"}
-    output = input
+    output = input_str
     for pbs, slurm in repl.items():
         output = output.replace(pbs, slurm)
     return output
@@ -94,7 +90,7 @@ def fix_jobname(pbs_directives):
         if m.group(1) == "":
             warn("#PBS -N without argument -> dropped")
         else:
-            return '#SBATCH --job-name="{}"'.format(m.group(1))
+            return f'#SBATCH --job-name="{m.group(1)}"'
     return j_re.sub(_repl, pbs_directives)
 
 
@@ -104,7 +100,7 @@ def fix_email_address(pbs_directives):
     pbsm_match = pbsm_re.search(pbs_directives)
     def _repl(m):
         if m.group(1) == "":
-            warn("#PBS -M without argument -> dropped".format(pbsm_match.group()))
+            warn(f"#PBS -M without argument -> dropped {pbsm_match.group()}")
             return ""
         all_adr = [x.strip() for x in m.group(1).split(",")]
         valid_adr = []
@@ -112,11 +108,11 @@ def fix_email_address(pbs_directives):
             if re.match(r'[\w.%+-]+@[\w.-]+\.[A-Za-z]{2,4}', adr) is not None:
                 valid_adr.append(adr)
         if len(valid_adr) == 0:
-            warn("email address may be invalid: '{}'".format(all_adr[0]))
+            warn(f"email address may be invalid: '{all_adr[0]}'")
             use_adr = all_adr[0]
         else:
             use_adr = valid_adr[0]
-        return '#SBATCH --mail-user="{}"'.format(use_adr)
+        return f'#SBATCH --mail-user="{use_adr}"'
     return pbsm_re.sub(_repl, pbs_directives)
 
 def fix_email_mode(pbs_directives):
@@ -136,7 +132,7 @@ def fix_email_mode(pbs_directives):
         if "e" in pbs_events:
             slurm_events.append("END")
         slurm_events.sort()
-        return "#SBATCH --mail-type={}".format(",".join(slurm_events))
+        return f"#SBATCH --mail-type={','.join(slurm_events)}"
     return pbsm_re.sub(_repl, pbs_directives)
 
 
@@ -162,15 +158,14 @@ def fix_stdout_stderr(pbs_directives):
             warn("#PBS -o without argument -> dropped")
             return ""
         else:
-            return "#SBATCH --output={}".format(m.group(1))
+            return f"#SBATCH --output={m.group(1)}"
     pbs_directives = out_re.sub(_repl, pbs_directives)
     # change the -e directive
     def _repl(m):
         if m.group(1) == "":
             warn("#PBS -e without argument -> dropped")
             return ""
-        else:
-            return "#SBATCH --error={}".format(m.group(1))
+        return f"#SBATCH --error={m.group(1)}"
     pbs_directives = err_re.sub(_repl, pbs_directives)
     return pbs_directives
 
@@ -206,8 +201,7 @@ def fix_variable_export(pbs_directives):
         if m.group(1) == "":
             warn("#PBS -v withouot arguments -> dropped")
             return ""
-        else:
-            return "#SBATCH --export={}".format("".join(m.group(1).split()))
+        return f"#SBATCH --export={''.join(m.group(1).split())}"
     return v_re.sub(_repl, pbs_directives)
 
 def fix_jobarray(pbs_directives):
@@ -217,8 +211,7 @@ def fix_jobarray(pbs_directives):
         if m.group(1) == "":
             warn("#PBS -J without argument -> dropped")
             return ""
-        else:
-            return "#SBATCH --array={}".format(m.group(1))
+        return f"#SBATCH --array={m.group(1)}"
     return j_re.sub(_repl, pbs_directives)
 
 def fix_resource_list(pbs_directives):
@@ -233,22 +226,21 @@ def fix_resource_list(pbs_directives):
             resources = m.group(1)
             if not "walltime" in resources:
                 return ""
-            else:
-                wt_m = wt_re.search(resources)
-                if wt_m is None:
-                    return ""
-                h = wt_m.group(1)
-                m = wt_m.group(2)
-                if len(m) == 1:
-                    m += "0"
-                elif len(m) > 2:
-                    return ""
-                s = wt_m.group(3)
-                if len(s) == 1:
-                    s += "0"
-                elif len(s) > 2:
-                    return ""
-                return "#SBATCH --time={}:{}:{}".format(h, m, s)
+            wt_m = wt_re.search(resources)
+            if wt_m is None:
+                return ""
+            h = wt_m.group(1)
+            m = wt_m.group(2)
+            if len(m) == 1:
+                m += "0"
+            elif len(m) > 2:
+                return ""
+            s = wt_m.group(3)
+            if len(s) == 1:
+                s += "0"
+            elif len(s) > 2:
+                return ""
+            return f"#SBATCH --time={h}:{m}:{s}"
         pbs_directives = l_re.sub(_repl, pbs_directives)
    
     return pbs_directives
@@ -260,8 +252,7 @@ def fix_queue(pbs_directives):
     if q_re.search(pbs_directives) is not None:
         info("dropping #PBS -q directive(s)")
         return q_re.sub("", pbs_directives)
-    else:
-        return pbs_directives
+    return pbs_directives
 
 
 
